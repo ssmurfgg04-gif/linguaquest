@@ -5,7 +5,7 @@ const Input = z.object({
 });
 
 export const loadStatsFn = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => Input.parse(d))
+  .validator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("../integrations/supabase/client.server");
 

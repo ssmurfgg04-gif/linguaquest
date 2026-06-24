@@ -12,7 +12,7 @@ const createSessionInput = z.object({
 });
 
 export const createSessionFn = createServerFn({ method: "POST" })
-  .inputValidator((data) => createSessionInput.parse(data))
+  .validator((data) => createSessionInput.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
@@ -52,7 +52,7 @@ const saveMessageInput = z.object({
 });
 
 export const saveMessageFn = createServerFn({ method: "POST" })
-  .inputValidator((data) => saveMessageInput.parse(data))
+  .validator((data) => saveMessageInput.parse(data))
   .handler(async ({ data }) => {
     await assertSessionOwnership(data.sessionId, data.guestToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -72,7 +72,7 @@ const finishSessionInput = z.object({
 });
 
 export const finishSessionFn = createServerFn({ method: "POST" })
-  .inputValidator((data) => finishSessionInput.parse(data))
+  .validator((data) => finishSessionInput.parse(data))
   .handler(async ({ data }) => {
     await assertSessionOwnership(data.sessionId, data.guestToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -109,7 +109,7 @@ const saveFeedbackInput = z.object({
 });
 
 export const saveFeedbackFn = createServerFn({ method: "POST" })
-  .inputValidator((data) => saveFeedbackInput.parse(data))
+  .validator((data) => saveFeedbackInput.parse(data))
   .handler(async ({ data }) => {
     await assertSessionOwnership(data.sessionId, data.guestToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -135,7 +135,7 @@ const loadSessionInput = z.object({
 });
 
 export const loadSessionFn = createServerFn({ method: "POST" })
-  .inputValidator((data) => loadSessionInput.parse(data))
+  .validator((data) => loadSessionInput.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: session, error: sErr } = await supabaseAdmin

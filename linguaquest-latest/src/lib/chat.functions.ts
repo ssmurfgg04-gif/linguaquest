@@ -94,7 +94,7 @@ async function tryReply(data: z.infer<typeof ReplyInput>): Promise<string> {
 }
 
 export const chatReply = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => ReplyInput.parse(d))
+  .validator((d: unknown) => ReplyInput.parse(d))
   .handler(async ({ data }) => {
     const reply = await tryReply(data);
     return { reply };
@@ -203,7 +203,7 @@ Return valid JSON: { "confidence": 0-100, "fluency": 0-100, "strengths": ["..."]
 }
 
 export const generateFeedback = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => FeedbackInput.parse(d))
+  .validator((d: unknown) => FeedbackInput.parse(d))
   .handler(async ({ data }) => {
     return await tryFeedback(data);
   });

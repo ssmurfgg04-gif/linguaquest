@@ -86,7 +86,7 @@ function localGrammarFallback(text: string, lang: string) {
 }
 
 export const correctGrammarFn = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => Input.parse(d))
+  .validator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
     const lang = LANG[data.language];
 
