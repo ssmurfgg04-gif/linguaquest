@@ -1,0 +1,10 @@
+# LinguaQuest
+
+> AI-powered language learning for school students. Practice real-life conversations in English, German, and French through roleplay with friendly AI characters.
+
+LinguaQuest teaches communication through real situations — friendships, school, leadership, presentations, customer service, job interviews — instead of isolated vocabulary drills. Designed for children and teenagers.
+
+## Pages
+- [Home](/): Levels, scenarios, characters overview
+- [Characters](/characters): Meet the six AI conversation partners
+- [Progress](/progress): Stars, streaks, badges, confidence and fluency
