@@ -13,7 +13,9 @@ import {
   saveFeedback,
   saveMessage,
 } from "@/lib/sessions";
-import { isSpeechSupported, startListening, speakText, loadBrowserVoices } from "@/lib/voice";
+import { speakText, loadBrowserVoices } from "@/lib/voice";
+import { isCaptureSupported, startCapture } from "@/lib/voice-recorder";
+import { transcribeAudio } from "@/lib/transcribe.server";
 import { generateOpener, generateReply } from "@/lib/reply-engine";
 import { trackWeeklyActivity } from "@/lib/weekly-goals";
 import { addXP } from "@/lib/xp-system";
@@ -62,8 +64,9 @@ function ChatScreen() {
   const [recording, setRecording] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const stopListeningRef = useRef<(() => void) | null>(null);
+  const captureRef = useRef<{ stop: () => void } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Ref to always hold the latest send function — avoids stale closure in voice recording callback
@@ -136,10 +139,9 @@ function ChatScreen() {
 
   useEffect(() => {
     inputRef.current?.focus();
-    // Cleanup voice recording listener on unmount
     return () => {
-      stopListeningRef.current?.();
-      stopListeningRef.current = null;
+      captureRef.current?.stop();
+      captureRef.current = null;
     };
   }, []);
 
@@ -231,39 +233,50 @@ function ChatScreen() {
     speakText(last.text, language).catch(() => {});
   }, [messages, mode, language]);
 
-  // Voice recording toggle — uses sendRef to avoid stale closures
   const toggleRecording = useCallback(() => {
     if (recording) {
-      stopListeningRef.current?.();
-      stopListeningRef.current = null;
+      captureRef.current?.stop();
+      captureRef.current = null;
       setRecording(false);
       return;
     }
-    if (!isSpeechSupported()) {
-      setVoiceError("Voice input needs Chrome or Edge. Switch to text mode.");
+    if (!isCaptureSupported()) {
+      setVoiceError("Voice input needs a browser with mic support.");
       return;
     }
     setVoiceError(null);
-    const { stop, started } = startListening(
-      language,
-      (transcript) => {
-        setRecording(false);
-        setInput(transcript);
-        // Use ref to always call the latest send — avoids stale closure bug
-        const trimmed = transcript.trim();
-        if (trimmed) {
-          sendRef.current(trimmed).catch((err) => {
-            console.error("Voice send failed:", err);
-          });
-        }
-      },
-      (err) => {
-        setRecording(false);
-        setVoiceError(err);
-      },
-    );
-    stopListeningRef.current = stop;
-    if (started) setRecording(true);
+    try {
+      const { stop, done } = startCapture();
+      captureRef.current = { stop };
+      setRecording(true);
+      done
+        .then(async ({ audioBase64, mimeType }) => {
+          setTranscribing(true);
+          try {
+            const { transcript } = await transcribeAudio({
+              data: { audioBase64, mimeType, language },
+            });
+            const trimmed = transcript.trim();
+            if (trimmed) {
+              setInput(trimmed);
+              sendRef.current(trimmed).catch((err) => {
+                console.error("Voice send failed:", err);
+              });
+            }
+          } catch (err: any) {
+            setVoiceError(err?.message ?? "Transcription failed");
+          } finally {
+            setTranscribing(false);
+            setRecording(false);
+          }
+        })
+        .catch((err: any) => {
+          setRecording(false);
+          setVoiceError(err?.message ?? "Could not start mic");
+        });
+    } catch (err: any) {
+      setVoiceError(err?.message ?? "Could not start mic");
+    }
   }, [recording, language]);
 
   return (
@@ -337,7 +350,7 @@ function ChatScreen() {
           </div>
         )}
         {mode === "voice" ? (
-          <VoiceBar recording={recording} onToggle={toggleRecording} voiceError={voiceError} characterName={character.name} />
+          <VoiceBar recording={recording} transcribing={transcribing} onToggle={toggleRecording} voiceError={voiceError} characterName={character.name} />
         ) : (
           <form
             onSubmit={(e) => { e.preventDefault(); send(input.trim()); }}
@@ -407,17 +420,20 @@ function TypingBubble({ character }: { character: Character }) {
   );
 }
 
-function VoiceBar({ recording, onToggle, voiceError, characterName }: { recording: boolean; onToggle: () => void; voiceError: string | null; characterName: string }) {
+function VoiceBar({ recording, transcribing, onToggle, voiceError, characterName }: { recording: boolean; transcribing: boolean; onToggle: () => void; voiceError: string | null; characterName: string }) {
   const supported =
-    typeof window !== "undefined" && isSpeechSupported();
+    typeof window !== "undefined" && isCaptureSupported();
+  const isBusy = recording || transcribing;
   return (
     <div className="mt-4 surface-card p-6 flex flex-col items-center gap-3 border border-border/60">
       <p className="text-sm text-muted-foreground">
         {!supported
           ? "Voice input not supported on this browser."
-          : recording
-            ? `Listening… speak to ${characterName}`
-            : "Tap the mic and start speaking"}
+          : transcribing
+            ? "Transcribing…"
+            : recording
+              ? `Recording… tap to stop and send`
+              : "Tap the mic and start speaking"}
       </p>
       {voiceError && (
         <p className="text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-1.5 text-center max-w-xs">
@@ -426,15 +442,15 @@ function VoiceBar({ recording, onToggle, voiceError, characterName }: { recordin
       )}
       <button
         onClick={onToggle}
-        disabled={!supported}
+        disabled={!supported || transcribing}
         className="relative h-20 w-20 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-pop hover:scale-105 transition-transform disabled:opacity-40"
-        aria-label={recording ? "Stop recording" : "Start recording"}
+        aria-label={recording ? "Stop recording" : isBusy ? "Transcribing…" : "Start recording"}
       >
         {recording && <span className="absolute inset-0 rounded-full bg-primary animate-pulse-ring" />}
-        <Mic className="h-8 w-8 relative" />
+        {transcribing ? <Loader2 className="h-8 w-8 animate-spin" /> : <Mic className="h-8 w-8 relative" />}
       </button>
       <p className="text-xs text-muted-foreground flex items-center gap-1">
-        <Sparkles className="h-3 w-3" /> Browser voice — works in Chrome & Edge.
+        <Sparkles className="h-3 w-3" /> Server-side AI transcription.
       </p>
     </div>
   );

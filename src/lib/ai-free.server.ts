@@ -15,13 +15,14 @@
 
 const OVERALL_TIMEOUT_MS = 25_000;
 
-// ── OVHcloud AI Endpoints (anonymous, no key, 2 req/min/IP) ──
-// EU-hosted, GDPR-compliant, OpenAI-compatible. Zero signup.
-const OVH_URL = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions";
+// ── OVHcloud AI Endpoints ──
+// EU-hosted, GDPR-compliant, OpenAI-compatible.
+// Anonymous: 2 req/min/IP. Set OVH_AI_ENDPOINTS_ACCESS_TOKEN for higher limits.
+const OVH_BASE = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1";
 const OVH_MODELS = [
-  "Llama-3.1-8B-Instruct",       // confirmed working, all langs
-  "Mistral-7B-Instruct-v0.3",     // fallback
-  "Qwen3-Coder-30B-A3B-Instruct", // powerful fallback (may be rate-limited)
+  "Llama-3.1-8B-Instruct",
+  "Mistral-7B-Instruct-v0.3",
+  "Qwen3-Coder-30B-A3B-Instruct",
 ];
 
 async function tryOVH(
@@ -29,12 +30,15 @@ async function tryOVH(
   maxTokens: number,
   signal: AbortSignal,
 ): Promise<string | null> {
+  const apiKey = getKey("OVH_AI_ENDPOINTS_ACCESS_TOKEN");
   for (const model of OVH_MODELS) {
     if (signal.aborted) return null;
     try {
-      const res = await fetch(OVH_URL, {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+      const res = await fetch(`${OVH_BASE}/chat/completions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           model,
           messages,
